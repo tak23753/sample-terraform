@@ -1,0 +1,5 @@
+export AWS_PROFILE=profile-name
+export AWS_ACCOUNT_ID=123456789012
+export AWS_REGION=ap-northeast-1
+export ENVIRONMENT=prod
+export SYSTEM=foo-bar

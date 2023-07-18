@@ -1,0 +1,50 @@
+acm:
+  - 'modules/acm/**'
+
+athena:
+  - 'modules/athena/**'
+
+cloudfront:
+  - 'modules/cloudfront/**'
+
+cloudtrail:
+  - 'modules/cloudtrail/**'
+
+cognito_user_pool:
+  - 'modules/cognito_user_pool/**'
+
+config:
+  - 'modules/config/**'
+
+ecr:
+  - 'modules/ecr/**'
+
+ecs:
+  - 'modules/ecs/**'
+
+elb:
+  - 'modules/elb/**'
+
+guardduty:
+  - 'modules/guardduty/**'
+
+lambda:
+  - 'modules/lambda/**'
+
+rds_aurora:
+  - 'modules/rds_aurora/**'
+
+s3:
+  - 'modules/s3/**'
+
+securityhub:
+  - 'modules/securityhub/**'
+
+ses:
+  - 'modules/ses/**'
+
+vpc:
+  - 'modules/vpc/**'
+
+waf:
+  - 'modules/waf/**'

@@ -1,0 +1,20 @@
+{
+  "name": "helloworld",
+  "version": "1.0.0",
+  "description": "",
+  "author": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "scripts": {
+    "build": "esbuild index.ts --bundle --minify --sourcemap --platform=node --target=es2020 --outfile=dist/index.js"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.101",
+    "esbuild": "^0.18.0"
+  },
+  "volta": {
+    "node": "18.16.1",
+    "npm": "9.7.2"
+  }
+}

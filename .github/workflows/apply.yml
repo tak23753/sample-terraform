@@ -1,0 +1,90 @@
+name: Terraform apply
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    types:
+      - closed
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  SYSTEM: ${{ vars.SYSTEM }}
+  DEV_AWS_ACCOUNT_ID: ${{ secrets.DEV_AWS_ACCOUNT_ID }}
+  PROD_AWS_ACCOUNT_ID: ${{ secrets.PROD_AWS_ACCOUNT_ID }}
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  notify-started:
+    if: github.event.pull_request.merged == true
+    uses: ./.github/workflows/_notify_started.yml
+    secrets: inherit
+
+  apply:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set env vars for each env
+        run: |
+          if [ ${{ github.ref_name }} == 'main' ]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+            echo "AWS_ACCOUNT_ID=${{ env.PROD_AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
+
+          elif [ ${{ github.ref_name }} == 'develop' ]; then
+            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+            echo "AWS_ACCOUNT_ID=${{ env.DEV_AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup aqua
+        uses: aquaproj/aqua-installer@v2.1.2
+        with:
+          aqua_version: v2.9.0
+          aqua_opts: ""
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.SYSTEM }}-${{ env.ENVIRONMENT }}-github-actions-terraform-role
+          role-session-name: ${{ env.SYSTEM }}-${{ env.ENVIRONMENT }}-github-actions-terraform-session
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Config Terraform plugin cache
+        run: |
+          echo 'plugin_cache_dir="$HOME/.terraform.d/plugin-cache"' >~/.terraformrc
+          mkdir --parents ~/.terraform.d/plugin-cache
+
+      - name: Cache Terraform Plugins
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terragrunt run-all init
+        working-directory: envs/${{ env.ENVIRONMENT }}
+        run: |
+          terragrunt run-all init --terragrunt-non-interactive
+
+      - name: Terragrunt run-all apply
+        working-directory: envs/${{ env.ENVIRONMENT }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          terragrunt run-all apply --terragrunt-non-interactive --terragrunt-tfpath $GITHUB_WORKSPACE/.github/scripts/tfwrapper.sh
+
+  notify-finished:
+    needs: apply
+    if: always()
+    uses: ./.github/workflows/_notify_finished.yml
+    secrets: inherit

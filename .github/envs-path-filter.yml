@@ -1,0 +1,86 @@
+dev/app:
+  - 'envs/dev/app/**'
+  - 'modules/ecr/**'
+  - 'modules/ecs/**'
+  - 'modules/cognito_user_pool/**'
+  - 'modules/s3/**'
+  - 'modules/ses/**'
+  - 'modules/lambda/**'
+
+prod/app:
+  - 'envs/prod/app/**'
+  - 'modules/ecr/**'
+  - 'modules/ecs/**'
+  - 'modules/cognito_user_pool/**'
+  - 'modules/s3/**'
+  - 'modules/ses/**'
+  - 'modules/lambda/**'
+
+dev/cicd:
+  - 'envs/dev/cicd/**'
+
+prod/cicd:
+  - 'envs/prod/cicd/**'
+
+dev/log:
+  - 'envs/dev/log/**'
+  - 'modules/s3/**'
+  - 'modules/athena/**'
+  - 'modules/lambda/**'
+
+prod/log:
+  - 'envs/prod/log/**'
+  - 'modules/s3/**'
+  - 'modules/athena/**'
+  - 'modules/lambda/**'
+
+dev/network:
+  - 'envs/dev/network/**'
+  - 'modules/vpc/**'
+
+prod/network:
+  - 'envs/prod/network/**'
+  - 'modules/vpc/**'
+
+dev/operation:
+  - 'envs/dev/operation/**'
+  - 'modules/cloudtrail/**'
+  - 'modules/config/**'
+
+prod/operation:
+  - 'envs/prod/operation/**'
+  - 'modules/cloudtrail/**'
+  - 'modules/config/**'
+
+dev/routing:
+  - 'envs/dev/routing/**'
+  - 'modules/acm/**'
+  - 'modules/cloudfront/**'
+  - 'modules/elb/**'
+  - 'modules/waf/**'
+
+prod/routing:
+  - 'envs/prod/routing/**'
+  - 'modules/acm/**'
+  - 'modules/cloudfront/**'
+  - 'modules/elb/**'
+  - 'modules/waf/**'
+
+dev/security:
+  - 'envs/dev/security/**'
+  - 'modules/guardduty/**'
+  - 'modules/securityhub/**'
+
+prod/security:
+  - 'envs/prod/security/**'
+  - 'modules/lambda/**'
+  - 'modules/guardduty/**'
+  - 'modules/securityhub/**'
+
+dev/storage:
+  - 'envs/dev/storage/**'
+  - 'modules/rds_aurora/**'
+
+prod/storage:
+  - 'envs/prod/storage/**'
+  - 'modules/rds_aurora/**'

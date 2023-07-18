@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "HashiCorp.terraform",
+    "tfsec.tfsec",
+    "hashicorp.hcl",
+    "fredwangwang.vscode-hcl-format"
+  ]
+}

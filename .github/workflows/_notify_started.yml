@@ -1,0 +1,31 @@
+name: Send started notification to Slack
+on:
+  workflow_call:
+
+env:
+  SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+  SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+jobs:
+  slack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send started notification to slack
+        uses: slackapi/slack-github-action@v1.23.0
+        env:
+          SLACK_BOT_TOKEN: ${{ env.SLACK_BOT_TOKEN }}
+        with:
+          channel-id: ${{ env.SLACK_CHANNEL_ID }}
+          payload: |
+            {
+              "text": ":bell: Workflow ${{ github.workflow }} #${{github.run_number}} was triggered by ${{ github.event.sender.login }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":bell: Workflow <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.workflow }} #${{github.run_number}}> was triggered by ${{ github.event.sender.login }}"
+                  }
+                }
+              ]
+            }

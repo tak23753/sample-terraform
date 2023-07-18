@@ -1,0 +1,218 @@
+name: Terraform plan
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  SYSTEM: ${{ vars.SYSTEM }}
+  DEV_AWS_ACCOUNT_ID: ${{ secrets.DEV_AWS_ACCOUNT_ID }}
+  PROD_AWS_ACCOUNT_ID: ${{ secrets.PROD_AWS_ACCOUNT_ID }}
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  notify-started:
+    uses: ./.github/workflows/_notify_started.yml
+    secrets: inherit
+
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      modules_changed_dirs: ${{ steps.modules_changes.outputs.changes }}
+      envs_changed_dirs: ${{ steps.filter_changed_envs_dirs.outputs.envs_changed_dirs}}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get changed modules dirs
+        uses: dorny/paths-filter@v2
+        id: modules_changes
+        with:
+          filters: .github/modules-path-filter.yml
+
+      - name: Get changed envs dirs
+        uses: dorny/paths-filter@v2
+        id: envs_changes
+        with:
+          filters: .github/envs-path-filter.yml
+
+      - name: Filter changed envs dirs
+        id: filter_changed_envs_dirs
+        run: |
+          dirs=${{ toJSON(steps.envs_changes.outputs.changes) }}
+          if [ ${{ github.base_ref }} == 'main' ]; then
+            env_type='prod'
+          elif [ ${{ github.base_ref }} == 'develop' ]; then
+            env_type='dev'
+          else
+            echo "Unsupported base_ref: ${{ github.base_ref }}" >&2
+            exit 1
+          fi
+
+          env_changed_dirs=$( echo "${dirs}" | jq '.[]' | grep $env_type | jq -sc )
+          echo "envs_changed_dirs=${env_changed_dirs}" >> $GITHUB_OUTPUT
+
+  modules-ci:
+    needs: setup
+    if: needs.setup.outputs.modules_changed_dirs != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        changed_dir: ${{ fromJson(needs.setup.outputs.modules_changed_dirs) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup aqua
+        uses: aquaproj/aqua-installer@v2.1.2
+        with:
+          aqua_version: v2.9.0
+          aqua_opts: ""
+
+      - name: Set env vars for dev
+        if: github.base_ref == 'develop'
+        run: |
+          echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$DEV_AWS_ACCOUNT_ID" >> $GITHUB_ENV
+
+      - name: Set env vars for prod
+        if: github.base_ref == 'main'
+        run: |
+          echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$PROD_AWS_ACCOUNT_ID" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.SYSTEM }}-${{ env.ENVIRONMENT }}-github-actions-terraform-role
+          role-session-name: ${{ env.SYSTEM }}-${{ env.ENVIRONMENT }}-github-actions-terraform-session
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: TFlint
+        working-directory: modules/${{ matrix.changed_dir }}
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tflint --config $GITHUB_WORKSPACE/.tflint.hcl --init
+          tflint --config $GITHUB_WORKSPACE/.tflint.hcl --format=checkstyle | \
+          reviewdog -f=checkstyle \
+                    -name="tflint" \
+                    -reporter=github-pr-review \
+                    -filter-mode=nofilter \
+                    -fail-on-error \
+
+      - name: Check Terraform fmt
+        working-directory: modules/${{ matrix.changed_dir }}
+        run: terraform fmt -check
+
+  envs-ci:
+    needs: setup
+    if: needs.setup.outputs.envs_changed_dirs != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        changed_dir: ${{ fromJson(needs.setup.outputs.envs_changed_dirs) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup aqua
+        uses: aquaproj/aqua-installer@v2.1.2
+        with:
+          aqua_version: v2.9.0
+          aqua_opts: ""
+
+      - name: Set env vars for dev
+        if: github.base_ref == 'develop'
+        run: |
+          echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$DEV_AWS_ACCOUNT_ID" >> $GITHUB_ENV
+
+      - name: Set env vars for prod
+        if: github.base_ref == 'main'
+        run: |
+          echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          echo "AWS_ACCOUNT_ID=$PROD_AWS_ACCOUNT_ID" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.SYSTEM }}-${{ env.ENVIRONMENT }}-github-actions-terraform-role
+          role-session-name: ${{ env.SYSTEM }}-${{ env.ENVIRONMENT }}-github-actions-terraform-session
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Config Terraform plugin cache
+        run: |
+          echo 'plugin_cache_dir="$HOME/.terraform.d/plugin-cache"' >~/.terraformrc
+          mkdir --parents ~/.terraform.d/plugin-cache
+
+      - name: Cache Terraform Plugins
+        uses: actions/cache@v3
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terragrunt init
+        working-directory: envs/${{ matrix.changed_dir }}
+        run: |
+          terragrunt init --terragrunt-non-interactive
+
+      - name: TFsec
+        working-directory: envs/${{ matrix.changed_dir }}
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tfsec --format=checkstyle | \
+          reviewdog -f=checkstyle \
+                    -name="tfsec" \
+                    -reporter=github-pr-review \
+                    -filter-mode=nofilter \
+                    -fail-on-error \
+
+      - name: TFlint
+        working-directory: envs/${{ matrix.changed_dir }}
+        env:
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tflint --config $GITHUB_WORKSPACE/.tflint.hcl --init
+          tflint --config $GITHUB_WORKSPACE/.tflint.hcl --format=checkstyle | \
+          reviewdog -f=checkstyle \
+                    -name="tflint" \
+                    -reporter=github-pr-review \
+                    -filter-mode=nofilter \
+                    -fail-on-error \
+
+      - name: Check terragrunt fmt
+        working-directory: envs/${{ matrix.changed_dir }}
+        run: terragrunt fmt -check
+
+      - name: Terragrunt validate
+        working-directory: envs/${{ matrix.changed_dir }}
+        run: terragrunt validate
+
+      - name: Terragrunt plan
+        working-directory: envs/${{ matrix.changed_dir }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          terragrunt plan --terragrunt-tfpath $GITHUB_WORKSPACE/.github/scripts/tfwrapper.sh
+
+  notify-finished:
+    if: always()
+    needs: [modules-ci, envs-ci]
+    uses: ./.github/workflows/_notify_finished.yml
+    secrets: inherit
